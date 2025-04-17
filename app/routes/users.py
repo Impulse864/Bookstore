@@ -51,7 +51,7 @@ def login():
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT U_Id, Password FROM Users WHERE Email = %s;", (email,))
+        cur.execute("SELECT * FROM Users WHERE Email = %s;", (email,))
         user = cur.fetchone()
 
         if user and check_password_hash(user[3], password):
