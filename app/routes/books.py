@@ -107,11 +107,21 @@ def filter_books():
         cur.close()
         close_db_connection(conn)
 
-def update_stock(book_id, amount=1):
+def subtract_stock(book_id, amount=1):
     conn = get_db_connection()
     cur = conn.cursor()
     try:
         cur.execute("UPDATE Books SET Stock = Stock - %s WHERE B_Id = %s;", (amount, book_id))
+        conn.commit()
+    finally:
+        cur.close()
+        close_db_connection(conn)
+        
+def add_stock(book_id, amount=1):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("UPDATE Books SET Stock = Stock + %s WHERE B_Id = %s;", (amount, book_id))
         conn.commit()
     finally:
         cur.close()
