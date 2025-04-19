@@ -42,7 +42,6 @@ def create_book():
         cur.close()
         close_db_connection(conn)
 
-
 @books_bp.route('/books/<uuid:b_id>', methods=['DELETE'])
 def delete_book(book_id):
     conn = get_db_connection()
@@ -51,25 +50,6 @@ def delete_book(book_id):
         cur.execute("DELETE FROM Books WHERE B_Id = %s;", (book_id,))
         conn.commit()
         return jsonify({"message": "Book deleted"}), 200
-    except Exception as e:
-        conn.rollback()
-        return jsonify({"error": str(e)}), 400
-    finally:
-        cur.close()
-        close_db_connection(conn)
-
-@books_bp.route('/books/<uuid:b_id>/return', methods=['PUT'])
-def return_book(b_id):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute("""
-            UPDATE Books
-            SET Stock = Stock + 1
-            WHERE B_Id = %s;
-        """, (b_id,))
-        conn.commit()
-        return jsonify({"message": "Book returned. Stock updated."}), 200
     except Exception as e:
         conn.rollback()
         return jsonify({"error": str(e)}), 400
@@ -108,22 +88,32 @@ def filter_books():
         cur.close()
         close_db_connection(conn)
 
-def subtract_stock(book_id, amount=1):
+@books_bp.route('/books/<uuid:book_id>/subtract_stock', methods=['POST'])
+def subtract_stock(book_id):
+    data = request.json
+    amount = data.get('amount', 1)
+
     conn = get_db_connection()
     cur = conn.cursor()
     try:
         cur.execute("UPDATE Books SET Stock = Stock - %s WHERE B_Id = %s;", (amount, book_id))
         conn.commit()
+        return jsonify({"message": f"Stock decreased by {amount} for book {book_id}"}), 200
     finally:
         cur.close()
         close_db_connection(conn)
         
-def add_stock(book_id, amount=1):
+@books_bp.route('/books/<uuid:book_id>/add_stock', methods=['POST'])
+def add_book_stock(book_id):
+    data = request.json
+    amount = data.get('amount', 1)
+
     conn = get_db_connection()
     cur = conn.cursor()
     try:
         cur.execute("UPDATE Books SET Stock = Stock + %s WHERE B_Id = %s;", (amount, book_id))
         conn.commit()
+        return jsonify({"message": f"Stock increased by {amount} for book {book_id}"}), 200
     finally:
         cur.close()
         close_db_connection(conn)
