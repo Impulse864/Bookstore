@@ -42,7 +42,8 @@ def create_book():
         cur.close()
         close_db_connection(conn)
 
-@books_bp.route('/books/<book_id>', methods=['DELETE'])
+
+@books_bp.route('/books/<uuid:b_id>', methods=['DELETE'])
 def delete_book(book_id):
     conn = get_db_connection()
     cur = conn.cursor()

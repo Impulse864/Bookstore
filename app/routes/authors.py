@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 from app.db import get_db_connection, close_db_connection
 
 authors_bp = Blueprint('authors', __name__)
