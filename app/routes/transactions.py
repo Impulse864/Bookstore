@@ -163,6 +163,48 @@ def return_book(transaction_id):
         cur.close()
         close_db_connection(conn)
 
+@transactions_bp.route('/transactions/<uuid:customer_id>/return_all', methods=['PUT'])
+def return_all(customer_id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT t.T_Id, t.B_Id
+            FROM Transactions t
+            JOIN Books b ON t.B_Id = b.B_Id
+            JOIN Sells s ON b.B_Id = s.B_Id
+            JOIN Merchants m ON s.M_Id = m.M_Id
+            WHERE t.C_Id = %s AND m.IsLibrary = TRUE AND t.returned_at IS NULL;
+        """, (str(customer_id),))
+        
+        transactions = cur.fetchall()
+
+        if not transactions:
+            return jsonify({"message": "No borrowed books to return."}), 200
+
+        for t_id, b_id in transactions:
+            cur.execute("""
+                UPDATE Transactions
+                SET returned_at = CURRENT_DATE
+                WHERE T_Id = %s;
+            """, (t_id,))
+            cur.execute("""
+                UPDATE Books
+                SET Stock = Stock + 1
+                WHERE B_Id = %s;
+            """, (b_id,))
+
+        conn.commit()
+        return jsonify({"message": f"Returned {len(transactions)} borrowed book(s)."}), 200
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 400
+
+    finally:
+        cur.close()
+        close_db_connection(conn)
+
 def transaction_fine(due_date, returned_at):
     effective_return = returned_at
 
