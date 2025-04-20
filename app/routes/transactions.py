@@ -15,7 +15,7 @@ def create_transaction():
 
     try:
         cur.execute("""
-            SELECT m.IsLibrary
+            SELECT m.IsLibrary, b.stock
             FROM Books b
             JOIN Sells s ON b.B_Id = s.B_Id
             JOIN Merchants m ON s.M_Id = m.M_Id
@@ -30,13 +30,22 @@ def create_transaction():
         transaction_date = date.today()
         due_date = transaction_date + timedelta(days=7) if is_library else None
 
+        print(f"Book id: {b_id}, Customer: {c_id}")
+
         cur.execute("""
-            INSERT INTO Transactions (B_Id, C_Id, TransactionDate, Due_Date)
+            INSERT INTO Transactions (c_id, b_id, Transaction_Date, Due_Date)
             VALUES (%s, %s, %s, %s)
             RETURNING T_Id;
-        """, (b_id, c_id, transaction_date, due_date))
+        """, (c_id, b_id, transaction_date, due_date))
 
         transaction_id = cur.fetchone()[0]
+
+        cur.execute("""
+            UPDATE Books
+            SET Stock = Stock - 1
+            WHERE B_Id = %s; """, (b_id,))
+
+
         conn.commit()
 
         return jsonify({
@@ -55,18 +64,21 @@ def create_transaction():
 
 @transactions_bp.route('/transactions/<uuid:customer_id>', methods=['GET'])
 def get_transaction_history(customer_id):
+
+    data = request.json
+    customer_id = data.get('user_id')
     conn = get_db_connection()
     cur = conn.cursor()
 
     try:
         cur.execute("""
-            SELECT t.T_Id, b.B_Id, b.Title, b.Genre, t.TransactionDate, t.Due_Date, m.IsLibrary, t.Returned_At
+            SELECT t.T_Id, b.B_Id, b.Title, b.Genre, t.Transaction_Date, t.Due_Date, m.IsLibrary, t.return_date
             FROM Transactions t
             JOIN Books b ON t.B_Id = b.B_Id
             JOIN Sells s ON b.B_Id = s.B_Id
             JOIN Merchants m ON s.M_Id = m.M_Id
             WHERE t.C_Id = %s
-            ORDER BY t.TransactionDate DESC;
+            ORDER BY t.Transaction_Date DESC;
         """, (str(customer_id),))
         history = cur.fetchall()
 
@@ -94,17 +106,19 @@ def get_transaction_history(customer_id):
 
 @transactions_bp.route('/transactions/<uuid:customer_id>/overdue', methods=['GET'])
 def get_overdue_books(customer_id):
+    data = request.json
+    customer_id = data.get('user_id')
     conn = get_db_connection()
     cur = conn.cursor()
 
     try:
         cur.execute("""
-            SELECT t.T_Id, b.Title, t.TransactionDate, t.Due_Date
+            SELECT t.T_Id, b.Title, t.Transaction_Date, t.Due_Date
             FROM Transactions t
             JOIN Books b ON t.B_Id = b.B_Id
             JOIN Sells s ON b.B_Id = s.B_Id
             JOIN Merchants m ON s.M_Id = m.M_Id
-            WHERE t.C_Id = %s AND m."IsLibrary" = TRUE AND t.Due_Date < CURRENT_DATE;
+            WHERE t.C_Id = %s AND m.IsLibrary = TRUE AND t.Due_Date < CURRENT_DATE AND t.return_date IS NULL;
         """, (str(customer_id),))
         overdue = cur.fetchall()
 
@@ -128,14 +142,18 @@ def get_overdue_books(customer_id):
         
 @transactions_bp.route('/transactions/<uuid:transaction_id>/return', methods=['PUT'])
 def return_book(transaction_id):
+    data = request.json
+    transaction_id = data.get('transaction_id')
     conn = get_db_connection()
     cur = conn.cursor()
     try:
         cur.execute("""
             UPDATE Transactions
-            SET returned_at = CURRENT_DATE
+            SET return_date = CURRENT_DATE
             WHERE T_Id = %s;
         """, (transaction_id,))
+
+        print("Updated transactions")
         
         cur.execute("""
                     SELECT B_Id 
@@ -146,12 +164,16 @@ def return_book(transaction_id):
         if not result:
             return jsonify({"error": "Transaction not found"}), 404
         b_id = result[0]
+
+        print("Got book id")
         
         cur.execute("""
             UPDATE Books
             SET Stock = Stock + 1
             WHERE B_Id = %s;
         """, (b_id,))
+
+        print("updated stock")
 
         conn.commit()
         return jsonify({"message": "Book returned and stock is updated."}), 200
@@ -205,13 +227,16 @@ def return_all(customer_id):
         cur.close()
         close_db_connection(conn)
 
-def transaction_fine(due_date, returned_at):
+def calculate_transaction_fine(due_date, returned_at):
+    print("calculating fine")
     effective_return = returned_at
 
     if effective_return <= due_date:
         return 0
 
     days_late = (effective_return - due_date).days
+
+    print(f"fine is {2 + days_late}")
     return 2 + days_late
 
 @transactions_bp.route('/transactions/<uuid:transaction_id>/fine', methods=['GET'])
@@ -248,33 +273,42 @@ def transaction_fine(transaction_id):
         cur.close()
         close_db_connection(conn)
 
-@transactions_bp.route('/transactions/<uuid:user_id>/fine', methods=['GET'])
+@transactions_bp.route('/transactions/<uuid:user_id>/total_fines', methods=['GET'])
 def total_fines(user_id):
+    data = request.json
+    user_id = data.get('user_id')
     conn = get_db_connection()
     cur = conn.cursor()
     try:
         cur.execute("""
-            SELECT t.Due_Date, t.returned_at
+            SELECT t.Due_Date, t.return_date
             FROM Transactions t
             JOIN Books b ON t.B_Id = b.B_Id
             JOIN Sells s ON b.B_Id = s.B_Id
             JOIN Merchants m ON s.M_Id = m.M_Id
             WHERE m.IsLibrary = TRUE AND (
-                (t.returned_at IS NULL AND t.Due_Date < CURRENT_DATE) OR
-                (t.returned_at IS NOT NULL AND t.returned_at > t.Due_Date)
+                (t.return_date IS NULL AND t.Due_Date < CURRENT_DATE) OR
+                (t.return_date IS NOT NULL AND t.return_date > t.Due_Date)
             ) AND t.C_Id = %s;
         """, (str(user_id),))
         transactions = cur.fetchall()
 
-        total_fine = sum(
-            transaction_fine(due_date=row[0], returned_at=row[1])
-            for row in transactions
-        )
+        total_fine = 0
+        #for row in transactions:
+        #    fine = calculate_transaction_fine(due_date=row[0], returned_at=row[1])
+        #    total_fine += fine
+
+        total_fine = 2 * len(transactions)
+
+        print(f"calculated fines {total_fine}")
+
         cur.execute("""
             UPDATE Customers
             SET Fines = %s
             WHERE C_Id = %s;
         """, (total_fine, str(user_id)))
+
+        print(f"updated fines")
 
         conn.commit()
         return jsonify({"fine": total_fine}), 200

@@ -64,18 +64,20 @@ def filter_books():
     author = data.get('author')
     max_price = data.get('max_price')
 
+    print(f"INFO IN FILTER BOOKS: Genre is {genre}")
+
     query = """
         SELECT DISTINCT b.B_Id, b.Title, b.Genre, b.Price, b.Rating
         FROM Books b
         LEFT JOIN Written w ON b.B_Id = w.B_Id
         LEFT JOIN Authors a ON w.A_Id = a.A_Id
-        WHERE (%s IS NULL OR b.Genre = %s) AND (%s IS NULL OR a.Name = %s) AND (%s IS NULL OR b.Price <= %s);
+        WHERE (b.Genre = %s OR %s IS NULL) AND (a.full_name = %s OR %s IS NULL) AND (%s IS NULL OR b.Price <= %s);
     """
 
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        cur.execute(query, (genre, genre, author, author, max_price, max_price))
+        cur.execute(query, (f'{genre}', genre, f'{author}', author, max_price, f'{max_price}'))
         books = cur.fetchall()
         return jsonify([{
             "id": str(row[0]),

@@ -6,9 +6,12 @@ preferences_bp = Blueprint('preferences', __name__)
 @preferences_bp.route('/users/<uuid:c_id>/preferences', methods=['PUT'])
 def update_preferences(c_id):
     data = request.json
-    fav_authors = data.get('fav_authors', [])
-    fav_genres = data.get('fav_genres', [])
-    fav_books = data.get('fav_books', [])
+    c_id = data.get('c_id')
+    fav_authors = data.get('fav_authors')
+    fav_genres = data.get('fav_genres')
+    fav_books = data.get('fav_books')
+
+    print(f"INFO: {c_id}, {type(fav_authors)}, {fav_genres}, {fav_books}")
 
     conn = get_db_connection()
     cur = conn.cursor()
@@ -18,7 +21,7 @@ def update_preferences(c_id):
             VALUES (%s, %s, %s, %s)
             ON CONFLICT (C_Id) DO UPDATE
             SET FavAuthors = EXCLUDED.FavAuthors, FavGenres = EXCLUDED.FavGenres, FavBooks = EXCLUDED.FavBooks;
-        """, (c_id, fav_authors, fav_genres, fav_books))
+        """, (c_id, f'{{"{fav_authors}"}}', f'{{"{fav_genres}"}}', f'{{"{fav_books}"}}'))
         conn.commit()
         return jsonify({"message": "Preferences updated."}), 200
     except Exception as e:

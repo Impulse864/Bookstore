@@ -31,7 +31,12 @@ def create_user():
             cur.execute("INSERT INTO Merchants (M_Id) VALUES (%s);", (u_id,))
 
         conn.commit()
-        return jsonify({"message": "User created successfully", "user_id": str(u_id)}), 201
+        return jsonify({"message": "User created successfully",
+                        "user_id": str(u_id),
+                        "name":str(name),
+                        "email": str(email),
+                        "password":str(password),
+                        "role":str(role)}), 201
     except Exception as e:
         conn.rollback()
         return jsonify({"error": str(e)}), 400
@@ -53,7 +58,7 @@ def login():
             WHERE Email = %s;
         """, (email,))
         user = cur.fetchone()
-        if not user or user[3] != password:
+        if (not user) or (user[3] != password):
             return jsonify({"error": "Invalid email or password"}), 401
 
         return jsonify({
@@ -108,10 +113,18 @@ def update_user_info(u_id):
 
 @users_bp.route('/users/<uuid:u_id>', methods=['DELETE'])
 def delete_user(u_id):
+    data = request.json
+    u_id = data.get('user_id')
+    c_id = u_id
     conn = get_db_connection()
     cur = conn.cursor()
     try:
+        cur.execute("DELETE FROM Transactions WHERE c_Id = %s;", (c_id,))
+        print("deleted from transactions")
+        cur.execute("DELETE FROM Customers WHERE c_Id = %s;", (c_id,))
+        print("deleted from customers")
         cur.execute("DELETE FROM Users WHERE U_Id = %s;", (u_id,))
+        print("deleted from users")
         conn.commit()
         return jsonify({"message": "User deleted successfully."}), 200
     except Exception as e:
