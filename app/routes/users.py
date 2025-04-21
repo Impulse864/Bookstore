@@ -121,6 +121,8 @@ def delete_user(u_id):
     try:
         cur.execute("DELETE FROM Transactions WHERE c_Id = %s;", (c_id,))
         print("deleted from transactions")
+        cur.execute("DELETE FROM Preferences WHERE c_Id = %s;", (c_id,))
+        print("deleted from preferences")
         cur.execute("DELETE FROM Customers WHERE c_Id = %s;", (c_id,))
         print("deleted from customers")
         cur.execute("DELETE FROM Users WHERE U_Id = %s;", (u_id,))
